@@ -1,0 +1,17 @@
+# Installed development dependencies and downloaded SDK
+/node_modules/
+/vendor/webview2/
+
+# Generated panel binaries and release archives
+/windows/panel/bin/
+/dist/
+
+# Local test fixtures, previews and runtime cache
+/.test-*/
+/artifacts/
+/panel-profile/
+*.log
+
+# Upstream reference archives are kept outside the source repository
+/vendor/macos-*/
+/vendor/CodexUsageCard-macOS-*.zip

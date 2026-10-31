@@ -1,0 +1,28 @@
+{
+  "name": "quotaring",
+  "version": "1.0.0",
+  "private": true,
+  "description": "View Codex remaining quota in the Windows taskbar",
+  "homepage": "https://github.com/huang0732/QuotaRing#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huang0732/QuotaRing.git"
+  },
+  "bugs": {
+    "url": "https://github.com/huang0732/QuotaRing/issues"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "doctor": "node manage.cjs doctor",
+    "start": "node manage.cjs launch",
+    "package": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1",
+    "build:panel": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-panel.ps1"
+  },
+  "devDependencies": {
+    "jsdom": "29.1.1"
+  }
+}

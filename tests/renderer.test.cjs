@@ -1,0 +1,43 @@
+'use strict';
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const {buildBootstrapScript,formatRateLimits,unavailableValue}=require('../agent.cjs');
+test('renderer places one card, updates values, supports focus tooltip, invalidation and cleanup',async()=>{
+  const {JSDOM}=await import('jsdom');
+  const dom=new JSDOM('<!doctype html><html class="light"><body><nav data-app-navigation-rail><div>navigation</div><footer>profile</footer></nav></body></html>',{runScripts:'outside-only',pretendToBeVisual:true});
+  const w=dom.window;
+  w.ResizeObserver=class {observe(){} unobserve(){} disconnect(){}};
+  w.HTMLElement.prototype.getBoundingClientRect=()=>({left:0,right:48,top:0,bottom:700,width:48,height:700});
+  try {
+    w.eval(buildBootstrapScript()); w.eval(buildBootstrapScript());
+    const badge=w.document.querySelector('#codex-usage-badge');
+    assert.equal(w.document.querySelectorAll('#codex-usage-badge').length,1);
+    assert.equal(badge.nextElementSibling.tagName,'FOOTER');
+    const data=formatRateLimits({rateLimits:{planType:'plus',primary:{usedPercent:18,windowDurationMins:300},secondary:{usedPercent:64,windowDurationMins:10080}}});
+    w.__codexUsageBadge.update({...data,updatedAt:Date.now(),stale:false});
+    assert.equal(w.__codexUsageBadge.status().placed,true);
+    assert.equal(badge.querySelector('.usage-number').textContent,'82%');
+    assert.equal(badge.querySelector('.usage-secondary .usage-number').textContent,'36%');
+    assert.equal(badge.querySelector('.usage-primary .usage-window').textContent,'5h额度');
+    assert.equal(badge.querySelector('.usage-secondary .usage-window').textContent,'周额度');
+    assert.equal(badge.getAttribute('role'),'group');
+    badge.focus(); assert.equal(w.document.querySelector('#codex-usage-tooltip').hidden,false);
+    assert.equal(w.document.querySelector('.usage-tooltip-title').textContent,'Codex 剩余额度');
+    badge.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape'}));
+    assert.equal(w.document.querySelector('#codex-usage-tooltip').hidden,true);
+    w.__codexUsageBadge.update({...formatRateLimits({rateLimits:{planType:'pro',primary:{usedPercent:18,windowDurationMins:300},secondary:{usedPercent:64,windowDurationMins:10080}}}),updatedAt:Date.now(),stale:false});
+    assert.equal(badge.getAttribute('role'),'meter');
+    assert.equal(badge.querySelector('.usage-window').textContent,'周额度');
+    assert.equal(badge.querySelector('.usage-number').textContent,'36%');
+    assert.equal(badge.querySelector('.usage-secondary').hidden,true);
+    w.__codexUsageBadge.update(unavailableValue(data));
+    assert.equal(badge.querySelector('.usage-number').textContent,'—');
+    w.__codexUsageBadge.update({...data,stale:false,updatedAt:Date.now()-151000});
+    assert.equal(w.__codexUsageBadge.status().stale,true);
+    w.document.querySelector('nav').remove(); w.__codexUsageBadge.place();
+    assert.equal(badge.hidden,true);
+    w.__codexUsageBadge.destroy();
+    assert.equal(w.document.querySelector('#codex-usage-badge'),null);
+    assert.equal(w.document.querySelector('#codex-usage-badge-style'),null);
+  } finally {w.close();}
+});
