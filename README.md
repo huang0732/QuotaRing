@@ -10,6 +10,14 @@ QuotaRing（额度环）是一款非官方的 Windows Codex 额度显示工具�
 
 [下载与版本发布](https://github.com/huang0732/QuotaRing/releases) · [反馈问题](https://github.com/huang0732/QuotaRing/issues)
 
+## 让 Codex 帮你安装
+
+可以将下面这段话复制给 Codex，让它按本项目说明帮助安装：
+
+> 请阅读 https://github.com/huang0732/QuotaRing 的 README，在这台 Windows 电脑上安装并启动 QuotaRing。从最新正式 Release 下载 Windows x64 完整安装包和 SHA256SUMS.txt，核对校验值后完整解压，按说明运行安装入口，最后检查后台和任务栏显示是否正常。请使用完整发布包安装，无需修改项目源码。若需要安装 WebView2，请先告诉我并等待确认。
+
+使用前，请确认电脑是 Windows x64，已安装并登录 Codex，且网络能访问 GitHub 和额度服务。Windows 11 x64 已实测，Windows 10 x64 尚未实机验证。
+
 ## 功能
 
 - **任务栏额度显示：** 圆环和百分比表示 Codex 剩余额度。
