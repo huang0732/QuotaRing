@@ -4,6 +4,7 @@ const fs=require('node:fs');const path=require('node:path');const readline=requi
 const {spawn,execFileSync}=require('node:child_process');const {once}=require('node:events');
 const {formatRateLimits}=require('../agent.cjs');
 const {readResetTimes}=require('../windows/reset-time.cjs');
+const roundEven=value=>value-Math.floor(value)===.5?Math.floor(value)+(Math.floor(value)%2):Math.round(value);
 test('native taskbar host: original labels, horizontal layout, popup growth for reset credits, hide/restore, clean exit',{
   skip:process.platform!=='win32',timeout:45000
 },async t=>{
@@ -20,6 +21,12 @@ test('native taskbar host: original labels, horizontal layout, popup growth for 
     assert.deepEqual(errors,[]);assert.equal(child.exitCode,null,'host exited unexpectedly');
     if(predicate(state))return state;await new Promise(r=>setTimeout(r,100));
   }throw Error('Panel state timed out: '+JSON.stringify(state));};
+  const checkPopupAnchor=s=>{
+    const b=s.bounds,d=s.detailsBounds,bar=s.taskbarBounds;
+    const expected=Math.max(bar.x+8,Math.min(b.x+Math.trunc((b.width-d.width)/2),bar.x+bar.width-d.width-8));
+    assert.ok(Math.abs(d.x-expected)<=1,'details should follow the badge while respecting the screen edges');
+  };
+  let layoutRefresh=null;
   try {
     const now=Math.floor(Date.now()/1000);
     const response={rateLimits:{planType:'plus',primary:{usedPercent:66,windowDurationMins:300,resetsAt:now+4*3600+120},secondary:{usedPercent:72,windowDurationMins:10080,resetsAt:now+6*86400+120}},rateLimitResetCredits:{availableCount:0}};
@@ -39,7 +46,7 @@ test('native taskbar host: original labels, horizontal layout, popup growth for 
     assert.equal(state.detailsBounds.width,Math.ceil(state.rendering.detailsContent.width*state.rendering.badgePixelRatio));
     assert.ok(state.rendering.detailsContent.width<300,'card should shrink to its content');
     assert.ok(state.detailsBounds.y+state.detailsBounds.height<state.bounds.y);
-    assert.ok(Math.abs(state.detailsBounds.x+state.detailsBounds.width/2-state.bounds.x-state.bounds.width/2)<=1);
+    checkPopupAnchor(state);
     const initial={...state.detailsBounds};
     const expiresAt=Math.floor(Date.now()/1000)+86400;
     const withCredits={...formatRateLimits({...response,rateLimitResetCredits:{availableCount:2,credits:[
@@ -68,15 +75,27 @@ test('native taskbar host: original labels, horizontal layout, popup growth for 
     const originalSize={width:state.bounds.width,height:state.bounds.height};
     send(layout([widget,crowded]));
     await wait(s=>s?.nativeVisible&&s.placement?.source==='test'&&s.placement.region==='left');
-    assert.equal(state.bounds.x,widget.x+widget.width+Math.round(12*scale));
+    assert.equal(state.bounds.x,widget.x+widget.width+roundEven(12*scale));
     assert.equal(state.bounds.width,originalSize.width);assert.equal(state.bounds.height,originalSize.height);
     send({type:'test',scenario:'click'});await wait(s=>s?.tooltipVisible&&s.rendering?.detailsFits);
     assert.ok(state.detailsBounds.y+state.detailsBounds.height<state.bounds.y);
-    assert.ok(Math.abs(state.detailsBounds.x+state.detailsBounds.width/2-state.bounds.x-state.bounds.width/2)<=1);
+    checkPopupAnchor(state);
     const stableLeft=state.bounds.x;
-    send(layout([widget,{...crowded,width:Math.round(bar.width*.15)}]));
+    const restored=layout([widget,{...crowded,width:Math.round(bar.width*.15)}]);
+    const restoredAt=Date.now();
+    send(restored);
+    layoutRefresh=setInterval(()=>send(restored),100);
     await wait(s=>s?.placement?.occupied?.[1]?.width===Math.round(bar.width*.15));
-    assert.equal(state.bounds.x,stableLeft,'safe left placement must remain stable when right space returns');
+    assert.equal(state.bounds.x,stableLeft,'return must not happen as soon as space first becomes available');
+    await new Promise(resolve=>setTimeout(resolve,300));
+    assert.equal(state.bounds.x,stableLeft,'return must wait for a full second');
+    await wait(s=>s?.nativeVisible&&s.placement?.source==='test'&&s.bounds.x===trayLeft-originalSize.width-roundEven(12*scale));
+    clearInterval(layoutRefresh);layoutRefresh=null;
+    assert.ok(Date.now()-restoredAt>=1000,'notification-area return requires at least one continuous second');
+    assert.equal(state.bounds.width,originalSize.width);assert.equal(state.bounds.height,originalSize.height);
+    assert.ok(state.tooltipVisible,'an open details card should follow the returning badge');
+    assert.ok(state.detailsBounds.y+state.detailsBounds.height<state.bounds.y);
+    checkPopupAnchor(state);
     send(layout([bar]));
     await wait(s=>s?.hiddenReason==='taskbar-no-space'&&!s.nativeVisible&&!s.tooltipVisible);
     send(layout([widget,crowded]));
@@ -90,6 +109,7 @@ test('native taskbar host: original labels, horizontal layout, popup growth for 
     // EOF must close only this panel and its WebView environment.
     child.stdin.end();await exited;assert.equal(child.exitCode,0);
   } finally {
+    clearInterval(layoutRefresh);
     if(child.exitCode===null){send({type:'shutdown'});child.stdin.end();await exited;}
     lines.close();assert.ok(profile.startsWith(root+path.sep+'.test-panel-'));
     await fs.promises.rm(profile,{recursive:true,force:true,maxRetries:10,retryDelay:100});

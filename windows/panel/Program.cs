@@ -14,8 +14,8 @@ using Microsoft.Web.WebView2.WinForms;
 [assembly: System.Reflection.AssemblyTitle("QuotaRing")]
 [assembly: System.Reflection.AssemblyProduct("QuotaRing")]
 [assembly: System.Reflection.AssemblyVersion("1.0.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.0.1.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("1.0.1")]
+[assembly: System.Reflection.AssemblyFileVersion("1.0.2.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("1.0.2")]
 
 static class Native {
     [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left,Top,Right,Bottom; public Rectangle Box {get{return Rectangle.FromLTRB(Left,Top,Right,Bottom);}} }
@@ -134,6 +134,7 @@ sealed class PanelController : ApplicationContext {
     readonly CardWindow badge,details;
     readonly Timer timer=new Timer();
     readonly TaskbarScanner scanner=new TaskbarScanner();
+    readonly TaskbarReturnState returnState=new TaskbarReturnState();
     readonly Process parent;
     readonly bool testMode;
     public bool TestMode {get{return testMode;}}
@@ -223,7 +224,7 @@ sealed class PanelController : ApplicationContext {
             placementSnapshot=testMode&&testSnapshot!=null?testSnapshot:scanner.Current(taskbar,bar);
             if(placementSnapshot==null){placementRegion="pending";HideAll("taskbar-layout-pending");return;}
             var size=new Size((int)Math.Ceiling(badge.CssWidth*scale),(int)Math.Ceiling(badge.CssHeight*scale));
-            var position=TaskbarPlacement.Choose(placementSnapshot,screen,size,scale,badge.Bounds,out placementRegion);
+            var position=returnState.Choose(placementSnapshot,screen,size,scale,badge.Bounds,Stopwatch.GetTimestamp(),out placementRegion);
             if(!position.HasValue){HideAll(placementRegion);return;}
             badge.SizeAndPlace(position.Value,scale);
             details.SizeAndPlace(Native.PopupAnchor(badge.Bounds,bar,screen,scale,details.CssWidth,details.CssHeight),scale);
@@ -246,7 +247,7 @@ sealed class PanelController : ApplicationContext {
         string m=json.Serialize(new {type="theme",dark=dark});badge.Post(m);details.Post(m);
     }
     void SetDetails(bool open){detailsOpen=open;badge.Post(json.Serialize(new {type="details-state",open=open}));}
-    void HideAll(string reason){hiddenReason=reason;SetDetails(false);badge.Hide();details.Hide();Status();}
+    void HideAll(string reason){returnState.Reset();hiddenReason=reason;SetDetails(false);badge.Hide();details.Hide();Status();}
     void Status(){var status=new {type="status",ready=badge.Ready&&details.Ready,visible=badge.Visible&&badge.Opacity>0,nativeVisible=Native.IsWindowVisible(badge.Handle),session=Process.GetCurrentProcess().SessionId,tooltipVisible=details.Visible&&details.Opacity>0,hiddenReason=hiddenReason,
         bounds=new {x=badge.Left,y=badge.Top,width=badge.Width,height=badge.Height},detailsBounds=new {x=details.Left,y=details.Top,width=details.Width,height=details.Height},
         taskbarBounds=new {x=taskbarBounds.Left,y=taskbarBounds.Top,width=taskbarBounds.Width,height=taskbarBounds.Height},

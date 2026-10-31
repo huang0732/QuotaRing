@@ -1,6 +1,6 @@
 # QuotaRing 安全与隐私说明
 
-本文描述 v1.0.1 的 Windows 任务栏实现。已完成的检查和尚未实机验证的范围见 [验证记录](docs/windows-validation.md)。
+本文描述 v1.0.2 的 Windows 任务栏实现。已完成的检查和尚未实机验证的范围见 [验证记录](docs/windows-validation.md)。
 
 ## 读取什么数据
 

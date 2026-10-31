@@ -6,7 +6,7 @@ const {randomUUID}=require('node:crypto');
 const p=require('./platform.cjs');
 const prerequisites=require('./prerequisites.cjs');
 const agent=require('../agent.cjs');
-const VERSION='1.0.1';
+const VERSION='1.0.2';
 const PANEL_FILES=['CodexUsagePanel.exe','panel.html','Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll','WebView2Loader.dll','WEBVIEW2-LICENSE.txt'].map(name=>'windows/panel/bin/'+name);
 const NODE_FILES=['runtime/node.exe','runtime/LICENSE'];
 const CORE_FILES=['agent.cjs','manage.cjs','LICENSE','windows/manage.cjs','windows/platform.cjs','windows/prerequisites.cjs','windows/system.ps1','windows/login.ps1'];

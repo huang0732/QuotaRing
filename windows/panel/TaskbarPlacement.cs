@@ -17,6 +17,37 @@ sealed class TaskbarSnapshot {
     public long Captured;
 }
 
+sealed class TaskbarReturnState {
+    public const int DelayMilliseconds=1000;
+    bool waiting;
+    long since;
+    IntPtr handle;
+    Rectangle target,bar,screen;
+    public void Reset(){waiting=false;}
+    public Rectangle? Choose(TaskbarSnapshot snapshot,Rectangle screenBounds,Size size,double scale,Rectangle current,long now,out string region) {
+        var position=TaskbarPlacement.Choose(snapshot,screenBounds,size,scale,current,out region);
+        if(!position.HasValue){Reset();return null;}
+        string preferredRegion;
+        var preferred=TaskbarPlacement.Choose(snapshot,screenBounds,size,scale,Rectangle.Empty,out preferredRegion);
+        int margin=Math.Max(1,(int)Math.Round(12*scale));
+        // Only return to the original tray-side anchor, not an internal gap
+        // between app buttons while the notification area is still crowded.
+        if(!preferred.HasValue||preferredRegion!="right"||preferred.Value.Right!=snapshot.TrayLeft-margin||preferred.Value==position.Value) {
+            Reset();return position;
+        }
+        if(!waiting||target!=preferred.Value||handle!=snapshot.Handle||bar!=snapshot.Bar||screen!=screenBounds||now<since) {
+            waiting=true;since=now;target=preferred.Value;handle=snapshot.Handle;bar=snapshot.Bar;screen=screenBounds;
+        }
+        long delay=(long)(Stopwatch.Frequency*(DelayMilliseconds/1000.0));
+        // A timer alone must not reuse one old scan as proof of continuous space.
+        // Require a fresh scan taken after the full waiting interval as well.
+        if(now-since>=delay&&snapshot.Captured-since>=delay) {
+            Reset();region="right";return preferred;
+        }
+        return position;
+    }
+}
+
 static class TaskbarPlacement {
     public static object Box(Rectangle r){return new {x=r.X,y=r.Y,width=r.Width,height=r.Height};}
     public static List<Rectangle> Gaps(Rectangle bar,Rectangle screen,IEnumerable<Rectangle> occupied,int margin) {
@@ -75,15 +106,30 @@ static class TaskbarPlacement {
         return new Rectangle(Convert.ToInt32(v["x"]),Convert.ToInt32(v["y"]),Convert.ToInt32(v["width"]),Convert.ToInt32(v["height"]));
     }
     public static TaskbarSnapshot SnapshotForTest(Dictionary<string,object> v) {
-        var s=new TaskbarSnapshot{Bar=ReadBox((Dictionary<string,object>)v["bar"]),AppsLeft=Convert.ToInt32(v["appsLeft"]),TrayLeft=Convert.ToInt32(v["trayLeft"]),Reliable=Convert.ToBoolean(v["reliable"]),Reason="taskbar-layout-unknown"};
+        var s=new TaskbarSnapshot{Bar=ReadBox((Dictionary<string,object>)v["bar"]),AppsLeft=Convert.ToInt32(v["appsLeft"]),TrayLeft=Convert.ToInt32(v["trayLeft"]),Reliable=Convert.ToBoolean(v["reliable"]),Reason="taskbar-layout-unknown",Captured=Stopwatch.GetTimestamp()};
         var occupied=new List<Rectangle>();foreach(var item in (IEnumerable)v["occupied"])occupied.Add(ReadBox((Dictionary<string,object>)item));s.Occupied=occupied.ToArray();
         return s;
     }
+    static long TestTicks(object milliseconds){return (long)Math.Round(Convert.ToDouble(milliseconds)*Stopwatch.Frequency/1000.0);}
+    static object EvaluateFrame(Dictionary<string,object> v,TaskbarReturnState state,ref Rectangle current) {
+        var s=SnapshotForTest(v);
+        long now=v.ContainsKey("nowMs")?TestTicks(v["nowMs"]):Stopwatch.GetTimestamp();
+        s.Captured=v.ContainsKey("capturedMs")?TestTicks(v["capturedMs"]):now;
+        Rectangle screen=ReadBox((Dictionary<string,object>)v["screen"]);
+        if(v.ContainsKey("current"))current=ReadBox((Dictionary<string,object>)v["current"]);
+        string region;var result=state.Choose(s,screen,new Size(Convert.ToInt32(v["width"]),Convert.ToInt32(v["height"])),Convert.ToDouble(v["scale"]),current,now,out region);
+        if(result.HasValue)current=result.Value;
+        return new {bounds=result.HasValue?Box(result.Value):null,region=region};
+    }
     public static string Evaluate(string input) {
-        var json=new JavaScriptSerializer();var v=json.Deserialize<Dictionary<string,object>>(input);var s=SnapshotForTest(v);
-        Rectangle screen=ReadBox((Dictionary<string,object>)v["screen"]),current=v.ContainsKey("current")?ReadBox((Dictionary<string,object>)v["current"]):Rectangle.Empty;
-        string region;var result=Choose(s,screen,new Size(Convert.ToInt32(v["width"]),Convert.ToInt32(v["height"])),Convert.ToDouble(v["scale"]),current,out region);
-        return json.Serialize(new {bounds=result.HasValue?Box(result.Value):null,region=region});
+        var json=new JavaScriptSerializer();var v=json.Deserialize<Dictionary<string,object>>(input);
+        var state=new TaskbarReturnState();Rectangle current=Rectangle.Empty;
+        if(v.ContainsKey("steps")) {
+            var results=new List<object>();
+            foreach(var step in (IEnumerable)v["steps"])results.Add(EvaluateFrame((Dictionary<string,object>)step,state,ref current));
+            return json.Serialize(results);
+        }
+        return json.Serialize(EvaluateFrame(v,state,ref current));
     }
 }
 

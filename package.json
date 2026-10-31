@@ -1,6 +1,6 @@
 {
   "name": "quotaring",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "View Codex remaining quota in the Windows taskbar",
   "homepage": "https://github.com/huang0732/QuotaRing#readme",
