@@ -207,9 +207,3 @@ QuotaRing 通过本机 Codex CLI 查询额度，由 CLI 使用其登录环境访
 本项目基于 [Lorie7813/codex-usage-card](https://github.com/Lorie7813/codex-usage-card) 的 macOS v0.9.4 版本二次开发，增加 Windows 任务栏显示、独立后台、重置倒计时和安装管理，并从 **v1.0.0** 开始独立编号。
 
 原项目的 **MIT 许可证及版权声明完整保留**；源码和安装包保留 `LICENSE` 与 `vendor/UPSTREAM.md`，安装包同时附带所用 WebView2 组件的许可证。QuotaRing 是独立维护的非官方工具，与 OpenAI 无官方关联。
-
-## 当前验证范围
-
-v1.0.0 已在当前 Windows 11 x64 设备完成本地构建、**42 项自动化测试**，以及源码和实际安装包的隔离安装、升级、重启、异常退出和卸载检查。安装包内容及配套 SHA256 校验文件已核对。
-
-Windows 10 x64、其他设备、更多缩放与字体组合尚未逐一验证。目前尚未专门跟随 Windows 的独立“文本大小”设置；后续 Windows、WebView2 或 Codex 更新也可能需要继续适配。
