@@ -4,14 +4,29 @@ const path=require('node:path');
 const {spawn}=require('node:child_process');
 const {randomUUID}=require('node:crypto');
 const p=require('./platform.cjs');
+const prerequisites=require('./prerequisites.cjs');
 const agent=require('../agent.cjs');
-const VERSION='1.0.0';
+const VERSION='1.0.1';
 const PANEL_FILES=['CodexUsagePanel.exe','panel.html','Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll','WebView2Loader.dll','WEBVIEW2-LICENSE.txt'].map(name=>'windows/panel/bin/'+name);
-const CORE_FILES=['agent.cjs','manage.cjs','LICENSE','windows/manage.cjs','windows/platform.cjs','windows/system.ps1','windows/login.ps1'];
+const NODE_FILES=['runtime/node.exe','runtime/LICENSE'];
+const CORE_FILES=['agent.cjs','manage.cjs','LICENSE','windows/manage.cjs','windows/platform.cjs','windows/prerequisites.cjs','windows/system.ps1','windows/login.ps1'];
 const FILES=[...CORE_FILES,'windows/usage-monitor.cjs','windows/reset-time.cjs','windows/taskbar.cjs',...PANEL_FILES];
-const UNINSTALL_FILES=[...FILES,'launch.vbs','agent.log','stop.json','worker-state.json'];
+const UNINSTALL_FILES=[...new Set([...FILES,...NODE_FILES,'launch.vbs','agent.log','stop.json','worker-state.json'])];
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const configPath=dir=>path.join(dir,'config.json');
+function nodeFiles(source) {
+  if(!fs.existsSync(path.join(source,'runtime')))return [];
+  for(const relative of NODE_FILES) {
+    const stat=p.assertContainedPath(source,path.join(source,relative));
+    if(!stat?.isFile())throw Error('QuotaRing 自带的 Node.js 文件不完整，请重新完整解压安装包。');
+  }
+  return NODE_FILES;
+}
+function requireExternalManager(dir) {
+  if(path.resolve(process.execPath).toLowerCase()===path.join(dir,'runtime','node.exe').toLowerCase()) {
+    throw Error('请从完整解压的安装包运行安装或卸载入口，避免替换或删除正在使用的 Node.js。');
+  }
+}
 function options(argv) {
   const result={command:argv[0] || 'help'};
   for(let i=1;i<argv.length;i++) {
@@ -40,13 +55,15 @@ function state(dir) {
 async function start(dir) {
   const config=p.ownedConfig(dir);
   if(state(dir)) return;
+  const nodePath=config.nodePath||process.execPath;
+  if(!fs.existsSync(nodePath))throw Error('QuotaRing 使用的 Node.js 不存在；请从新安装包重新安装或修复。');
   if(config.backgroundMode==='wmi-breakaway') {
     p.system('StartWorker',configPath(dir));
   } else {
     // Compatibility path for unintegrated portable setups and isolated tests.
     const log=fs.openSync(path.join(dir,'agent.log'),'a');
     try {
-      const child=spawn(process.execPath,[path.join(dir,'manage.cjs'),'worker','--install-dir',dir],{
+      const child=spawn(nodePath,[path.join(dir,'manage.cjs'),'worker','--install-dir',dir],{
         cwd:dir,detached:true,windowsHide:true,stdio:['ignore',log,log],env:process.env
       });
       await new Promise((resolve,reject)=>{child.once('error',reject);child.once('spawn',resolve);});
@@ -63,7 +80,7 @@ async function stop(dir) {
   if(lock.owner!==p.OWNER) throw Error('无法确认后台归属');
   p.writeJson(path.join(dir,'stop.json'),{instance:lock.instance});
   for(let i=0;i<75;i++) {
-    if(!fs.existsSync(path.join(dir,'worker.lock'))) return;
+    if(!fs.existsSync(path.join(dir,'worker.lock'))&&!p.alive(lock.pid)) return;
     await pause(200);
   }
   throw Error('后台未能正常停止，未强制终止任何进程');
@@ -113,6 +130,18 @@ async function install(opts) {
   const dir=p.assertDirectory(opts.dir);
   const source=path.resolve(__dirname,'..');
   if(dir.toLowerCase()===source.toLowerCase()) throw Error('请选择不同于源码的安装目录');
+  requireExternalManager(dir);
+  const packagedNodeFiles=nodeFiles(source);
+  const runtimeFiles=[...(opts.noShortcuts?CORE_FILES:FILES),...packagedNodeFiles];
+  for(const relative of runtimeFiles) {
+    if(!fs.statSync(path.join(source,relative)).isFile())throw Error('安装文件缺失：'+relative);
+    checkedFile(dir,path.join(dir,relative));
+  }
+  if(fs.existsSync(dir)&&fs.readdirSync(dir).length)p.ownedConfig(dir);
+  if(!opts.noShortcuts) {
+    prerequisites.ensureFramework();
+    await prerequisites.ensureWebView2();
+  }
   let migratedFrom=null;
   const oldDir=path.join(process.env.LOCALAPPDATA || path.join(require('node:os').homedir(),'AppData','Local'),'CodexUsageCard');
   // OpenAI is explicitly excluded from AppData virtualization by the installed
@@ -157,7 +186,6 @@ async function install(opts) {
   p.createCodexResolver({codexBin,appPath},{inspect:()=>system})();
   if(previous) await stop(dir);
   fs.mkdirSync(dir,{recursive:true});
-  const runtimeFiles=opts.noShortcuts?CORE_FILES:FILES;
   for(const relative of runtimeFiles) {
     const destination=path.join(dir,relative);
     p.assertDirectory(path.dirname(destination));
@@ -177,7 +205,8 @@ async function install(opts) {
     p.system('RestoreOriginal',configPath(dir));
     p.login('Restore',configPath(dir));
   }
-  const config={owner:p.OWNER,version:VERSION,installDir:dir,nodePath:process.execPath,appPath,
+  const installedNode=packagedNodeFiles.length?path.join(dir,'runtime','node.exe'):process.execPath;
+  const config={owner:p.OWNER,version:VERSION,installDir:dir,nodePath:installedNode,appPath,
     codexBin,
     autoStart:!opts.noShortcuts && opts.autoStart!==false,noShortcuts:!!opts.noShortcuts,
     backgroundMode:opts.noShortcuts ? 'legacy' : 'wmi-breakaway',
@@ -186,7 +215,7 @@ async function install(opts) {
     ...(previous?.migratedFrom || migratedFrom ? {migratedFrom:previous?.migratedFrom || migratedFrom} : {}),
     ...(process.env.CODEX_HOME ? {codexHome:process.env.CODEX_HOME} : {})};
   p.writeJson(configPath(dir),config);
-  p.writeLauncher(path.join(dir,'launch.vbs'),process.execPath,path.join(dir,'manage.cjs'));
+  p.writeLauncher(path.join(dir,'launch.vbs'),installedNode,path.join(dir,'manage.cjs'));
   if(!opts.noShortcuts) {
     if(config.autoStart) p.system('InstallBackground',configPath(dir));
     else p.system('RemoveBackground',configPath(dir));
@@ -197,7 +226,7 @@ async function install(opts) {
     p.ownedConfig(config.migratedFrom);
     fs.renameSync(configPath(config.migratedFrom),path.join(config.migratedFrom,'migrated-config.json'));
   }
-  console.log('Windows 任务栏版已安装，圆环横向排列在任务栏右侧，点击后在正上方显示详情卡；关闭 Codex 后仍查询额度。');
+  console.log('Windows 任务栏版已安装，圆环在任务栏空白中横向显示，优先右侧并自动避让图标；点击后在正上方显示详情卡，关闭 Codex 后仍查询额度。');
   console.log('后台已启动；当前工作窗口保持运行。'+(config.autoStart ? '插件后台随 Windows 登录启动，不会自动打开 Codex。' : '插件后台未设置登录自启。'));
 }
 async function launch(opts) {
@@ -272,7 +301,7 @@ function cleanStoppedLock(dir,expected) {
 function preflightUninstall(dir) {
   const config=p.ownedConfig(dir);
   for(const relative of UNINSTALL_FILES)checkedFile(dir,path.join(dir,relative));
-  for(const folder of ['windows','windows/panel','windows/panel/bin','worker.lock']) {
+  for(const folder of ['windows','windows/panel','windows/panel/bin','runtime','worker.lock']) {
     const stat=p.assertContainedPath(dir,path.join(dir,folder));
     if(stat&&!stat.isDirectory())throw Error('安装子目录不是普通目录，已中止卸载');
   }
@@ -281,6 +310,7 @@ function preflightUninstall(dir) {
   return {config,lock};
 }
 async function uninstall(opts) {
+  requireExternalManager(opts.dir);
   const before=preflightUninstall(opts.dir);
   await stop(opts.dir);
   const {config}=preflightUninstall(opts.dir);
@@ -302,7 +332,7 @@ async function uninstall(opts) {
     await fs.promises.rm(profile,{recursive:true,force:true,maxRetries:10,retryDelay:100});
   }
   if(checkedFile(opts.dir,configPath(opts.dir)))fs.unlinkSync(configPath(opts.dir));
-  for(const folder of [path.join(opts.dir,'windows','panel','bin'),path.join(opts.dir,'windows','panel'),path.join(opts.dir,'windows'),opts.dir]) {
+  for(const folder of [path.join(opts.dir,'windows','panel','bin'),path.join(opts.dir,'windows','panel'),path.join(opts.dir,'windows'),path.join(opts.dir,'runtime'),opts.dir]) {
     const stat=p.assertContainedPath(opts.dir,folder);
     if(stat&&!stat.isDirectory())throw Error('安装子目录不是普通目录，已中止卸载');
     if(stat&&!fs.readdirSync(folder).length)fs.rmdirSync(folder);
@@ -339,7 +369,7 @@ async function doctor(opts) {
     desktopFound:app,cliFound:cli,desktopRunning:info.running.length>0,
     background:runtime ? 'running' : 'stopped',backgroundMode:runtime?.launchMode || config?.backgroundMode || null,
     integration,localConnection:pages.length>0,ui,
-    next: !runtime ? '插件后台未运行，请执行 node manage.cjs start。' : !pages.length ? '保存工作并完全退出 Codex，再点击原来的 Codex 图标。' :
+    next: !runtime ? '插件后台未运行，请运行启动-Windows.cmd。' : !pages.length ? '保存工作并完全退出 Codex，再点击原来的 Codex 图标。' :
       ui.some(b=>b?.placed && b.hasData && !b.stale) ? '用量卡片已显示并读取额度。' : '本地连接正常，但用量卡片尚未就绪，请检查登录和插件后台。'
   },null,2));
 }
@@ -366,7 +396,7 @@ async function main(argv=process.argv.slice(2)) {
     case 'worker': return worker(opts.dir);
     case 'doctor': case 'status': return doctor(opts);
     case 'read': return readUsage(opts);
-    case 'help': console.log('node manage.cjs install|launch|status|read|stop|uninstall\n可选参数：--app <exe> --codex-bin <exe> --install-dir <目录>\n默认在任务栏右侧独立显示，随登录启动；--no-auto-start 可关闭后台登录自启'); return;
+    case 'help': console.log('运行 安装-Windows.cmd、启动-Windows.cmd、诊断-Windows.cmd 或 卸载-Windows.cmd\n管理命令需要 Node.js 24 或更新版本；完整发布包已自带 Node.js。\n可选参数：--app <exe> --codex-bin <exe> --install-dir <目录>\n默认在任务栏右侧独立显示，随登录启动；--no-auto-start 可关闭后台登录自启'); return;
     default: throw Error('未知操作。运行 node manage.cjs help 查看用法');
   }
 }

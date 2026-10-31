@@ -72,7 +72,7 @@ test('startup launcher refuses a linked parent without changing its target',wind
   }finally{cleanup(dir,[link]);}
 });
 
-for(const folder of ['windows','panel-profile']){
+for(const folder of ['windows','panel-profile','runtime']){
   test('uninstall rejects a linked '+folder+' before deleting any owned or external file',windows,async()=>{
     const dir=fixture(),{installed,external}=owned(dir),link=path.join(installed,folder);
     try{

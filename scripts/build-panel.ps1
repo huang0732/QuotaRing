@@ -15,7 +15,8 @@ foreach ($name in @('Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.Wi
 }
 Copy-Item -LiteralPath (Join-Path $sdk 'runtimes\win-x64\native\WebView2Loader.dll') -Destination $out -Force
 $compiler = Join-Path $env:SystemRoot 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-& $compiler /nologo /target:winexe /platform:x64 /optimize+ (('/out:' + (Join-Path $out 'CodexUsagePanel.exe'))) (('/win32manifest:' + (Join-Path $root 'windows\panel\app.manifest'))) /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll (('/r:' + (Join-Path $out 'Microsoft.Web.WebView2.Core.dll'))) (('/r:' + (Join-Path $out 'Microsoft.Web.WebView2.WinForms.dll'))) (Join-Path $root 'windows\panel\Program.cs')
+$wpf = Join-Path $env:SystemRoot 'Microsoft.NET\Framework64\v4.0.30319\WPF'
+& $compiler /nologo /target:winexe /platform:x64 /optimize+ (('/out:' + (Join-Path $out 'CodexUsagePanel.exe'))) (('/win32manifest:' + (Join-Path $root 'windows\panel\app.manifest'))) /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll (('/r:' + (Join-Path $wpf 'UIAutomationClient.dll'))) (('/r:' + (Join-Path $wpf 'UIAutomationTypes.dll'))) (('/r:' + (Join-Path $wpf 'WindowsBase.dll'))) (('/r:' + (Join-Path $out 'Microsoft.Web.WebView2.Core.dll'))) (('/r:' + (Join-Path $out 'Microsoft.Web.WebView2.WinForms.dll'))) (Join-Path $root 'windows\panel\Program.cs') (Join-Path $root 'windows\panel\TaskbarPlacement.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Panel compilation failed.' }
 & node.exe (Join-Path $root 'windows\panel\page.cjs')
 if ($LASTEXITCODE -ne 0) { throw 'Panel page generation failed.' }

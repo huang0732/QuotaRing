@@ -14,8 +14,8 @@ using Microsoft.Web.WebView2.WinForms;
 [assembly: System.Reflection.AssemblyTitle("QuotaRing")]
 [assembly: System.Reflection.AssemblyProduct("QuotaRing")]
 [assembly: System.Reflection.AssemblyVersion("1.0.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("1.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.0.1.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("1.0.1")]
 
 static class Native {
     [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left,Top,Right,Bottom; public Rectangle Box {get{return Rectangle.FromLTRB(Left,Top,Right,Bottom);}} }
@@ -133,6 +133,7 @@ sealed class PanelController : ApplicationContext {
     readonly StreamWriter output=new StreamWriter(Console.OpenStandardOutput()){AutoFlush=true};
     readonly CardWindow badge,details;
     readonly Timer timer=new Timer();
+    readonly TaskbarScanner scanner=new TaskbarScanner();
     readonly Process parent;
     readonly bool testMode;
     public bool TestMode {get{return testMode;}}
@@ -141,6 +142,8 @@ sealed class PanelController : ApplicationContext {
     double scale=1,configuredHeight=-1;
     int ticks=0;
     Rectangle taskbarBounds;
+    TaskbarSnapshot placementSnapshot,testSnapshot;
+    string placementRegion="pending";
     public PanelController(string profile,int parentPid,bool testing) {
         testMode=testing;PageUri="https://codex-usage-card.local/panel.html";
         parent=Process.GetProcessById(parentPid);
@@ -169,6 +172,8 @@ sealed class PanelController : ApplicationContext {
                     if(type=="shutdown"){Shutdown();return;}
                     if(type=="usage"){data=line;badge.Post(data);details.Post(data);}
                     if(type=="test"&&testMode){testScenario=Convert.ToString(m["scenario"]);if(testScenario=="click")SetDetails(!detailsOpen);Tick();}
+                    if(type=="test-layout"&&testMode){testSnapshot=TaskbarPlacement.SnapshotForTest(m);Tick();}
+                    if(type=="test-layout-clear"&&testMode){testSnapshot=null;Tick();}
                 }
             }
         }catch{}finally{Shutdown();}
@@ -214,9 +219,13 @@ sealed class PanelController : ApplicationContext {
             bool automatic=(Native.SHAppBarMessage(4,ref appbar).ToUInt64()&1)!=0;
             if(testScenario=="fullscreen"||Native.Fullscreen(screen,badge.Handle,details.Handle)){HideAll("fullscreen");return;}
             if(testScenario=="taskbar-hidden"||!Native.IsWindowVisible(taskbar)||Native.HiddenBar(bar,screen,automatic)){HideAll("taskbar-hidden");return;}
-            IntPtr tray=Native.FindWindowEx(taskbar,IntPtr.Zero,"TrayNotifyWnd",null);Native.Rect trayRect;
-            int trayLeft=tray!=IntPtr.Zero&&Native.GetWindowRect(tray,out trayRect)?trayRect.Left:bar.Right-(int)Math.Round(240*scale);
-            badge.SizeAndPlace(Native.Anchor(bar,screen,trayLeft,scale,badge.CssWidth,badge.CssHeight),scale);
+            scanner.Request(taskbar,bar);
+            placementSnapshot=testMode&&testSnapshot!=null?testSnapshot:scanner.Current(taskbar,bar);
+            if(placementSnapshot==null){placementRegion="pending";HideAll("taskbar-layout-pending");return;}
+            var size=new Size((int)Math.Ceiling(badge.CssWidth*scale),(int)Math.Ceiling(badge.CssHeight*scale));
+            var position=TaskbarPlacement.Choose(placementSnapshot,screen,size,scale,badge.Bounds,out placementRegion);
+            if(!position.HasValue){HideAll(placementRegion);return;}
+            badge.SizeAndPlace(position.Value,scale);
             details.SizeAndPlace(Native.PopupAnchor(badge.Bounds,bar,screen,scale,details.CssWidth,details.CssHeight),scale);
             if(!testMode&&detailsOpen) {
                 var point=Cursor.Position;
@@ -241,12 +250,13 @@ sealed class PanelController : ApplicationContext {
     void Status(){var status=new {type="status",ready=badge.Ready&&details.Ready,visible=badge.Visible&&badge.Opacity>0,nativeVisible=Native.IsWindowVisible(badge.Handle),session=Process.GetCurrentProcess().SessionId,tooltipVisible=details.Visible&&details.Opacity>0,hiddenReason=hiddenReason,
         bounds=new {x=badge.Left,y=badge.Top,width=badge.Width,height=badge.Height},detailsBounds=new {x=details.Left,y=details.Top,width=details.Width,height=details.Height},
         taskbarBounds=new {x=taskbarBounds.Left,y=taskbarBounds.Top,width=taskbarBounds.Width,height=taskbarBounds.Height},
+        placement=new {region=placementRegion,reliable=placementSnapshot!=null&&placementSnapshot.Reliable,source=testMode&&testSnapshot!=null?"test":"uia",occupied=placementSnapshot==null?new object[0]:Array.ConvertAll(placementSnapshot.Occupied,r=>TaskbarPlacement.Box(r))},
         labels=badge.Labels,indicators=badge.Indicators,badgeTimeFits=badge.TimeFits,title=badge.Heading,stale=badge.Stale,updatedAt=badge.UpdatedAt,dpi=(int)Math.Round(scale*96),theme=dark?"dark":"light",visibility=Native.Visibility(badge),
         rendering=new {windowDpi=Native.GetDpiForWindow(badge.Handle),badgePixelRatio=badge.PixelRatio,badgeViewport=new {width=badge.ViewportWidth,height=badge.ViewportHeight},badgeViewSize=new {width=badge.View.Width,height=badge.View.Height},badgeContent=new {width=badge.CssWidth,height=badge.CssHeight},badgeFits=badge.ViewportWidth>=badge.CssWidth-1&&badge.ViewportHeight>=badge.CssHeight-1,detailsPixelRatio=details.PixelRatio,detailsViewport=new {width=details.ViewportWidth,height=details.ViewportHeight},detailsViewSize=new {width=details.View.Width,height=details.View.Height},detailsContent=new {width=details.CssWidth,height=details.CssHeight},detailsFits=details.ViewportWidth>=details.CssWidth-1&&details.ViewportHeight>=details.CssHeight-1,detailsTextFits=details.TextFits}};string serialized=json.Serialize(status);if(serialized!=lastStatus){lastStatus=serialized;Emit(status);}}
     void Emit(object m){try{output.WriteLine(json.Serialize(m));}catch{Shutdown();}}
-    public void Fail(string code){Emit(new {type="error",code=code});Shutdown();}
+    public void Fail(string code){Emit(new {type="error",code=code,message=code=="WebView2RuntimeNotFoundException"?"缺少微软 WebView2 Runtime。请重新运行安装-Windows.cmd，按提示安装所需运行环境。":null});Shutdown();}
     async void Shutdown(){
-        if(closing)return;closing=true;timer.Stop();MainForm=null;
+        if(closing)return;closing=true;timer.Stop();scanner.Stop();MainForm=null;
         var exited=new TaskCompletionSource<bool>();
         EventHandler<CoreWebView2BrowserProcessExitedEventArgs> onExit=(s,e)=>exited.TrySetResult(true);
         if(Environment!=null)Environment.BrowserProcessExited+=onExit;else exited.TrySetResult(true);
@@ -260,6 +270,11 @@ sealed class PanelController : ApplicationContext {
 
 static class Program {
     [STAThread] static int Main(string[] args) {
+        if(Array.IndexOf(args,"--placement-test")>=0) {
+            using(var input=new StreamReader(Console.OpenStandardInput()))
+            using(var output=new StreamWriter(Console.OpenStandardOutput()))output.WriteLine(TaskbarPlacement.Evaluate(input.ReadToEnd()));
+            return 0;
+        }
         if(Array.IndexOf(args,"--self-test")>=0) {
             var screen=new Rectangle(0,0,1920,1080);var bar=new Rectangle(0,1032,1920,48);
             var position=Native.Anchor(bar,screen,1680,1,136,38);

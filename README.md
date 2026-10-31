@@ -2,17 +2,18 @@
 
 **在 Windows 任务栏查看 Codex 剩余额度和重置倒计时。**
 
-QuotaRing（额度环）是一款非官方的 Windows Codex 额度显示工具。它在主显示器的任务栏右侧、系统通知区域左边显示额度圆环和剩余百分比；点击显示条，可以在正上方展开详情卡片。
+QuotaRing（额度环）是一款非官方的 Windows Codex 额度显示工具。它在主显示器任务栏的可用空白中显示额度圆环和剩余百分比，优先放在系统通知区域左边；点击显示条，可以在正上方展开详情卡片。
 
 关闭 Codex 桌面窗口后，QuotaRing 仍通过独立后台查询额度。你可以继续使用原来的 Codex 图标打开客户端。
 
-> **当前状态：v1.0.0 源码已上传，Windows 安装包待发布。** 本地构建和验证已完成。以下下载安装步骤供首发安装包发布后使用；实际可下载的文件以 Releases 附件为准。
+> **当前版本：v1.0.1。** 完整安装包自带 Node.js；缺少 WebView2 时，安装入口会询问是否从微软下载并安装。
 
 [下载与版本发布](https://github.com/huang0732/QuotaRing/releases) · [反馈问题](https://github.com/huang0732/QuotaRing/issues)
 
 ## 功能
 
 - **任务栏额度显示：** 圆环和百分比表示 Codex 剩余额度。
+- **避让任务栏图标：** 根据实际按钮位置查找连续空白；右侧放不下时使用左侧等空白区域，左侧靠任务栏边缘或小组件右侧摆放。保留完整尺寸，当前位置安全时保持不动。
 - **点击查看详情：** 在显示条上方查看额度周期、剩余比例、重置时间，以及服务端提供的重置卡数量和最近到期时间。
 - **重置倒计时：** 用 5 个小圆点表示五小时窗口的剩余小时数，用 7 个小竖条表示周窗口的剩余天数。
 - **独立后台查询：** 正常约每 60 秒读取一次额度，并处理服务端额度更新通知；关闭 Codex 桌面窗口后继续工作。
@@ -27,12 +28,12 @@ QuotaRing 只显示 **Codex 账号额度**。显示的是后台查询进程所�
 | 项目 | 要求或验证范围 |
 | --- | --- |
 | 系统 | Windows 11 x64 已在开发者当前设备上验证；Windows 10 x64 为兼容目标，尚未实机验证。 |
-| Node.js | 需要 **24 或更新版本**，可从 [Node.js 官网](https://nodejs.org/en/download)安装。 |
-| 显示组件运行环境 | 需要 .NET Framework 4.8 和 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)。缺少 WebView2 时，可在微软页面安装 Evergreen Runtime。 |
+| Node.js | 完整发布包自带 Node.js 24.22.2 x64；不要求预装 Node.js，也不会修改系统 PATH。 |
+| 显示组件运行环境 | 需要 .NET Framework 4.8（Windows 11 已包含兼容版本）和 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)。安装时会检查 WebView2；缺少时在命令窗口询问是否从微软下载并安装。此步骤需要联网。 |
 | Codex 与登录 | 需要本机已安装 Codex 桌面客户端；Codex CLI 可正常运行，并能使用现有 ChatGPT 登录信息查询额度。安装器会尝试从已有客户端定位 CLI。 |
 | 网络 | 后台查询时，需要能访问 Codex 的额度服务。 |
 
-安装面向当前 Windows 用户，正常使用无需管理员权限。完整安装包已经包含构建好的显示程序，普通用户无需编译或安装项目开发依赖。
+安装面向当前 Windows 用户。QuotaRing 本身不要求管理员权限；缺少 WebView2 时，微软 Runtime 安装结果仍可能受电脑上的 Edge 更新器或组织策略影响。完整安装包包含构建好的显示程序和 Node.js，普通用户无需编译或安装项目开发依赖。
 
 当前不提供 macOS、Linux 或 ARM64 专用安装包。
 
@@ -42,7 +43,7 @@ QuotaRing 只显示 **Codex 账号额度**。显示的是后台查询进程所�
 
 打开 [Releases 下载页](https://github.com/huang0732/QuotaRing/releases)，在对应版本的 **Assets（附件）** 中下载：
 
-- `QuotaRing-Windows-x64-v1.0.0.zip`：Windows x64 完整安装包。
+- `QuotaRing-Windows-x64-v1.0.1.zip`：Windows x64 完整安装包。
 - `SHA256SUMS.txt`：该版本安装包的校验文件。
 
 如果 Releases 没有这两个附件，表示安装包尚未发布。GitHub 自动生成的 **Source code (zip / tar.gz)** 是源码压缩包，需要自行构建。
@@ -50,7 +51,7 @@ QuotaRing 只显示 **Codex 账号额度**。显示的是后台查询进程所�
 需要核对下载文件时，可在 ZIP 所在文件夹打开 PowerShell，执行以下命令，将结果与 `SHA256SUMS.txt` 中的值比较：
 
 ```powershell
-Get-FileHash -LiteralPath .\QuotaRing-Windows-x64-v1.0.0.zip -Algorithm SHA256
+Get-FileHash -LiteralPath .\QuotaRing-Windows-x64-v1.0.1.zip -Algorithm SHA256
 ```
 
 ### 2. 选择下载和解压位置
@@ -77,12 +78,14 @@ Get-FileHash -LiteralPath .\QuotaRing-Windows-x64-v1.0.0.zip -Algorithm SHA256
 
 ### 3. 运行安装入口
 
-1. 先准备好系统要求中的组件，并确认本机 Codex 登录和额度查询环境可用。
+1. 确认本机 Codex 已登录、额度查询环境可用，并保持网络连接。无需先安装 Node.js；若缺少 WebView2，安装时会询问是否自动下载。
 2. 将 ZIP **完整解压**。不要在压缩包内直接运行，也不要只取出某一个脚本或程序。
 3. 在解压文件夹中双击 **`安装-Windows.cmd`**，等待安装和后台启动完成。
 4. 等待额度读取后，点击任务栏显示条，确认上方详情卡能够显示数据。
 
 安装会复制插件运行文件并设置后台登录自启，不修改 Codex 客户端文件或签名，也不要求关闭或重启当前工作窗口。安装后，原来的 Codex 图标继续正常使用。
+
+WebView2 安装最多等待 3 分钟，完成后立即继续，不需要等满上限。若超时，QuotaRing 会停止本次安装或升级并提示重试；旧版文件保留。微软安装可能仍在后台继续，请等待其结束后，再运行 `安装-Windows.cmd`。提示中会给出保留的临时安装文件位置和微软官方下载链接。
 
 ## 日常使用
 
@@ -104,6 +107,8 @@ Get-FileHash -LiteralPath .\QuotaRing-Windows-x64-v1.0.0.zip -Algorithm SHA256
 详情卡保留 `5h额度`、`周额度` 等文字信息，并在接口提供数据时显示重置卡数量和最近到期时间。卡片高度随内容调整。
 
 面板默认随 Windows 登录启动；关闭 Codex 桌面窗口后仍继续查询。任务栏隐藏或进入全屏时，面板暂时隐藏。当前仅在主显示器任务栏显示一份。
+
+显示条会读取任务栏按钮的位置，并留出约 12 个逻辑像素的间隔，随显示缩放换算。优先使用右侧空白；右侧不足时，使用左端或小组件右侧的空白，也会检查其他足够宽的连续空白。当前位置仍然安全就不主动移回右侧。整个任务栏都放不下时暂时隐藏，空白恢复后自动出现；检测尚未完成、结果过期或无法可靠识别任务栏时，也会暂时隐藏以避免覆盖图标。
 
 ### 圆环、圆点和竖条分别表示什么
 
@@ -128,7 +133,7 @@ Get-FileHash -LiteralPath .\QuotaRing-Windows-x64-v1.0.0.zip -Algorithm SHA256
 | Pro | 一个周额度圆环；缺失对应周窗口时显示 `—`。 |
 | Free 及其他账号 | 沿用上游单环选择规则，部分额度窗口只会在详情中列出。 |
 
-**Free 账号的已知限制：** 当接口返回 30 天等未匹配到圆环选择规则的窗口时，详情卡可能已有剩余比例和重置时间，但任务栏仍显示 `—`，详情标题也可能提示暂时无法读取。v1.0.0 保留这一显示限制。
+**Free 账号的已知限制：** 当接口返回 30 天等未匹配到圆环选择规则的窗口时，详情卡可能已有剩余比例和重置时间，但任务栏仍显示 `—`，详情标题也可能提示暂时无法读取。本版保留这一显示限制。
 
 当前不提供普通 ChatGPT 聊天额度、API Key 计费余额或多账号同时显示，也没有可靠跟随其他客户端切换账号的机制。VS Code、IDEA 等客户端的独立登录环境尚未逐一验证。
 
@@ -149,9 +154,11 @@ Get-FileHash -LiteralPath .\QuotaRing-Windows-x64-v1.0.0.zip -Algorithm SHA256
 2. 等待明确提示卸载完成，确认任务栏额度显示条已经消失。
 3. 卸载完成后，可以删除 ZIP 和解压文件夹。
 
-卸载会停止插件后台和显示窗口，移除插件自己的登录启动项，删除已知运行文件和带归属标记的专用显示缓存。如果存在旧开发版保存的快捷方式或客户端登录设置备份，会按备份尝试恢复；后来被用户修改的项目不会被直接覆盖。
+卸载会停止插件后台和显示窗口，移除插件自己的登录启动项，删除已知运行文件（包括 QuotaRing 自带的 Node.js）和带归属标记的专用显示缓存。如果存在旧开发版保存的快捷方式或客户端登录设置备份，会按备份尝试恢复；后来被用户修改的项目不会被直接覆盖。
 
 **Codex 客户端、账号登录、聊天记录和未知用户文件会保留。** 卸载直接删除插件已知文件，不移入回收站。存在未知文件时，安装目录可能仍然保留。
+
+卸载会删除 QuotaRing 自带的 Node.js，但不会卸载用户原有的 Node.js 或共享的 WebView2 Runtime。
 
 卸载遇到目录联接、归属不明的缓存、无效或变化的状态锁等情况时，会中止并报告原因。此时先保留文件，运行诊断并核对问题；请勿仅凭显示条消失就认为已经卸载完成。
 
@@ -161,7 +168,7 @@ Get-FileHash -LiteralPath .\QuotaRing-Windows-x64-v1.0.0.zip -Algorithm SHA256
 
 **面板没有显示怎么办？**
 
-先退出全屏应用，确认主任务栏已经展开，再运行 `启动-Windows.cmd`。仍未显示时，运行 `诊断-Windows.cmd`，检查后台、WebView2 和额度数据状态。若提示找不到 Node.js，请先安装 Node.js 24 或更新版本，再重新打开入口。
+先退出全屏应用，确认主任务栏已经展开且有足够空白，再运行 `启动-Windows.cmd`。任务栏被图标占满时，显示条会暂时隐藏，空白恢复后自动出现。仍未显示时，运行 `诊断-Windows.cmd`，检查后台、任务栏布局、WebView2 和额度数据状态。完整发布包内置 Node.js；若提示缺少运行文件，请重新完整解压发布包后再运行入口。
 
 **为什么显示 `—`？**
 
@@ -173,13 +180,13 @@ Get-FileHash -LiteralPath .\QuotaRing-Windows-x64-v1.0.0.zip -Algorithm SHA256
 
 ```powershell
 # 临时停止；下次登录 Windows 仍会按现有设置启动
-node manage.cjs stop
+.\runtime\node.exe .\manage.cjs stop
 
 # 再次启动
-node manage.cjs start
+.\runtime\node.exe .\manage.cjs start
 
 # 更新为不随登录启动的设置，并继续启动当前面板
-node manage.cjs install --no-auto-start
+.\runtime\node.exe .\manage.cjs install --no-auto-start
 ```
 
 以后需要恢复登录自启时，重新运行默认的 `安装-Windows.cmd`。临时停止与完整卸载是不同操作。
@@ -206,4 +213,4 @@ QuotaRing 通过本机 Codex CLI 查询额度，由 CLI 使用其登录环境访
 
 本项目基于 [Lorie7813/codex-usage-card](https://github.com/Lorie7813/codex-usage-card) 的 macOS v0.9.4 版本二次开发，增加 Windows 任务栏显示、独立后台、重置倒计时和安装管理，并从 **v1.0.0** 开始独立编号。
 
-原项目的 **MIT 许可证及版权声明完整保留**；源码和安装包保留 `LICENSE` 与 `vendor/UPSTREAM.md`，安装包同时附带所用 WebView2 组件的许可证。QuotaRing 是独立维护的非官方工具，与 OpenAI 无官方关联。
+原项目的 **MIT 许可证及版权声明完整保留**；源码和安装包保留 `LICENSE` 与 `vendor/UPSTREAM.md`，安装包同时附带所用 WebView2 组件和 Node.js 的许可证。QuotaRing 是独立维护的非官方工具，与 OpenAI 无官方关联。

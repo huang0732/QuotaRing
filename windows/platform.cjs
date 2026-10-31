@@ -70,7 +70,7 @@ function quoteVbs(value) { return String(value).replaceAll('"','""'); }
 function launcherVbs(node, manager) {
   if (/[\r\n"]/u.test(node+manager)) throw Error('路径包含不支持的字符');
   const command=`"${node}" "${manager}" start --install-dir "${path.dirname(manager)}"`;
-  return `' ${OWNER}\r\nSet shell = CreateObject("WScript.Shell")\r\nresult = shell.Run("${quoteVbs(command)}", 0, True)\r\nIf result <> 0 Then MsgBox "The background helper could not start. Run node manage.cjs status in the extracted folder for details.", 48, "QuotaRing"\r\n`;
+  return `' ${OWNER}\r\nSet shell = CreateObject("WScript.Shell")\r\nresult = shell.Run("${quoteVbs(command)}", 0, True)\r\nIf result <> 0 Then MsgBox "QuotaRing 后台未能启动。请运行解压文件夹中的诊断-Windows.cmd 检查状态。", 48, "QuotaRing"\r\n`;
 }
 function writeLauncher(file, node, manager) {
   const dir=assertDirectory(path.dirname(file));

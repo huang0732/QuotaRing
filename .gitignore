@@ -4,6 +4,7 @@
 
 # Generated panel binaries and release archives
 /windows/panel/bin/
+/runtime/
 /dist/
 
 # Local test fixtures, previews and runtime cache

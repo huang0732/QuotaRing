@@ -20,7 +20,7 @@ async function startTaskbar({dir,config,logger=()=>{},profileDir}) {
     child.stdin.on('error',()=>{});child.stderr.resume();
     lines=readline.createInterface({input:child.stdout});
     lines.on('line',line=>{let m;try{m=JSON.parse(line);}catch{return;}
-      if(m.type==='status'){ui=m;restarts=0;}else if(m.type==='error'){logger('任务栏显示组件错误：'+String(m.code));}
+      if(m.type==='status'){ui=m;restarts=0;}else if(m.type==='error'){logger('任务栏显示组件错误：'+String(m.code)+(m.message?'；'+String(m.message):''));}
     });
     let finished=false;const gone=()=>{
       if(finished)return;finished=true;if(host===child){host=null;ui={ready:false,visible:false,hiddenReason:'host-exit'};}

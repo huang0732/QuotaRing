@@ -30,6 +30,10 @@ test('native taskbar host: original labels, horizontal layout, popup growth for 
     assert.deepEqual(state.indicators.map(i=>[i.kind,i.total,i.lit]),[['hours',5,5],['days',7,7]]);
     assert.equal(state.bounds.height,Math.ceil(state.rendering.badgeContent.height*state.rendering.badgePixelRatio));
     assert.equal(state.bounds.width,Math.ceil(state.rendering.badgeContent.width*state.rendering.badgePixelRatio));
+    assert.equal(state.placement.reliable,true);
+    for(const occupied of state.placement.occupied) {
+      assert.ok(state.bounds.x+state.bounds.width<=occupied.x||state.bounds.x>=occupied.x+occupied.width,'live placement must not cover a taskbar control');
+    }
     assert.ok(state.bounds.y>=state.taskbarBounds.y);assert.ok(state.bounds.y+state.bounds.height<=state.taskbarBounds.y+state.taskbarBounds.height);
     send({type:'test',scenario:'click'});await wait(s=>s?.tooltipVisible&&s.rendering?.detailsFits&&s.rendering?.detailsTextFits);
     assert.equal(state.detailsBounds.width,Math.ceil(state.rendering.detailsContent.width*state.rendering.badgePixelRatio));
@@ -56,6 +60,31 @@ test('native taskbar host: original labels, horizontal layout, popup growth for 
     send({type:'test',scenario:'click'});await wait(s=>s?.tooltipVisible);
     send({type:'test',scenario:'fullscreen'});await wait(s=>s?.hiddenReason==='fullscreen'&&!s.nativeVisible&&!s.tooltipVisible);
     send({type:'test',scenario:'normal'});await wait(s=>s?.nativeVisible&&s.hiddenReason==='');
+    const bar={...state.taskbarBounds},scale=state.rendering.badgePixelRatio;
+    const appLeft=bar.x+Math.floor(bar.width*.35),trayLeft=bar.x+Math.floor(bar.width*.85);
+    const widget={x:bar.x,y:bar.y,width:Math.round(120*scale),height:bar.height};
+    const crowded={x:appLeft,y:bar.y,width:trayLeft-appLeft,height:bar.height};
+    const layout=occupied=>({type:'test-layout',bar,appsLeft:appLeft,trayLeft,reliable:true,occupied});
+    const originalSize={width:state.bounds.width,height:state.bounds.height};
+    send(layout([widget,crowded]));
+    await wait(s=>s?.nativeVisible&&s.placement?.source==='test'&&s.placement.region==='left');
+    assert.equal(state.bounds.x,widget.x+widget.width+Math.round(12*scale));
+    assert.equal(state.bounds.width,originalSize.width);assert.equal(state.bounds.height,originalSize.height);
+    send({type:'test',scenario:'click'});await wait(s=>s?.tooltipVisible&&s.rendering?.detailsFits);
+    assert.ok(state.detailsBounds.y+state.detailsBounds.height<state.bounds.y);
+    assert.ok(Math.abs(state.detailsBounds.x+state.detailsBounds.width/2-state.bounds.x-state.bounds.width/2)<=1);
+    const stableLeft=state.bounds.x;
+    send(layout([widget,{...crowded,width:Math.round(bar.width*.15)}]));
+    await wait(s=>s?.placement?.occupied?.[1]?.width===Math.round(bar.width*.15));
+    assert.equal(state.bounds.x,stableLeft,'safe left placement must remain stable when right space returns');
+    send(layout([bar]));
+    await wait(s=>s?.hiddenReason==='taskbar-no-space'&&!s.nativeVisible&&!s.tooltipVisible);
+    send(layout([widget,crowded]));
+    await wait(s=>s?.nativeVisible&&s.placement?.region==='left');
+    assert.equal(state.bounds.width,originalSize.width);
+    send({...layout([]),reliable:false});
+    await wait(s=>s?.hiddenReason==='taskbar-layout-unknown'&&!s.nativeVisible);
+    send({type:'test-layout-clear'});await wait(s=>s?.nativeVisible&&s.placement?.source==='uia');
     send({type:'test',scenario:'taskbar-hidden'});await wait(s=>s?.hiddenReason==='taskbar-hidden'&&!s.nativeVisible);
     send({type:'test',scenario:'normal'});await wait(s=>s?.nativeVisible&&s.hiddenReason==='');
     // EOF must close only this panel and its WebView environment.
